@@ -34,8 +34,15 @@ async def search_gazette(query: str, limit: int = 10) -> dict:
 
 @mcp.tool()
 async def fetch_official_source(url: str) -> dict:
-    """ดึงข้อมูลจาก URL ทางการที่ whitelist พร้อม SHA-256"""
-    return await fetch_source(url)
+    try:
+        return await fetch_source(url)
+    except Exception as e:
+        return {
+            "error": "fetch_official_source_failed",
+            "type": type(e).__name__,
+            "message": str(e),
+            "url": url,
+        }
 
 @mcp.tool()
 async def verify_source(url: str, expected_text: str = "", expected_title: str = "") -> dict:
