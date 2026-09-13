@@ -2,12 +2,16 @@ from pathlib import Path
 import os
 import yaml
 
-ROOT = Path(__file__).resolve().parents[2]
-CONFIG_PATH = ROOT / "config.yaml"
+CONFIG_PATH = Path(os.getenv("LEGAL_MCP_CONFIG", "config.yaml"))
+
+if not CONFIG_PATH.is_absolute():
+    CONFIG_PATH = Path.cwd() / CONFIG_PATH
+
 
 def load_config() -> dict:
     with CONFIG_PATH.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
 
 CONFIG = load_config()
 
