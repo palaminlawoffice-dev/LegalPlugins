@@ -1,0 +1,43 @@
+name: Thai Legal Research MCP
+policy:
+  allowed_hosts:
+    - www.ocs.go.th
+    - ocs.go.th
+    - searchlaw.ocs.go.th
+    - www.supremecourt.or.th
+    - supremecourt.or.th
+    - deka.supremecourt.or.th
+    - ratchakitcha.soc.go.th
+    - www.ratchakitcha.soc.go.th
+  discovery_domains:
+    - ocs.go.th
+    - supremecourt.or.th
+    - deka.supremecourt.or.th
+    - ratchakitcha.soc.go.th
+sources:
+  ocs:
+    name: สำนักงานคณะกรรมการกฤษฎีกา
+    homepage: https://www.ocs.go.th/
+    search: https://www.ocs.go.th/searchlaw-law
+    domains:
+      - ocs.go.th
+      - www.ocs.go.th
+      - searchlaw.ocs.go.th
+    scope: law_and_legal_opinions
+  supreme_court:
+    name: ศาลฎีกา
+    homepage: https://www.supremecourt.or.th/
+    search: https://deka.supremecourt.or.th/
+    domains:
+      - deka.supremecourt.or.th
+      - supremecourt.or.th
+      - www.supremecourt.or.th
+    scope: supreme_court_decisions
+  gazette:
+    name: ราชกิจจานุเบกษา
+    homepage: https://ratchakitcha.soc.go.th/
+    search: https://ratchakitcha.soc.go.th/
+    domains:
+      - ratchakitcha.soc.go.th
+      - www.ratchakitcha.soc.go.th
+    scope: official_publication_verification

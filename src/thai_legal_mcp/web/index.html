@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<meta name="description" content="Thai Legal Research — ระบบค้นคว้ากฎหมายไทยจากแหล่งข้อมูลทางการ">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>Thai Legal Research</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#172033;background:#f3f5f7;line-height:1.5}
+*{box-sizing:border-box}body{margin:0}.wrap{width:min(1100px,100%);margin:auto;padding:16px}
+header{padding:14px 0 8px}.brand{font-size:clamp(1.45rem,4vw,2rem);font-weight:800}.sub{color:#667085;font-size:.92rem}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #1018280d}
+h2{font-size:1.05rem;margin:0 0 10px}label{display:block;font-weight:650;font-size:.9rem;margin-top:8px}
+textarea,input{width:100%;padding:11px 12px;border:1px solid #cfd5dd;border-radius:9px;background:#fff;font:inherit;margin:6px 0 10px}
+textarea{resize:vertical;min-height:150px}button{border:0;border-radius:9px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer;background:#172033;color:#fff}button.secondary{background:#eef1f5;color:#172033}button:disabled{opacity:.55;cursor:wait}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:180px}.status{font-size:.88rem;margin-top:8px}.ok{color:#087443}.err{color:#b42318}
+#out{white-space:pre-wrap;word-break:break-word;background:#f7f8fa;border:1px solid #e5e7eb;padding:12px;border-radius:9px;min-height:160px;max-height:650px;overflow:auto}
+.source{padding:10px 0;border-bottom:1px solid #eaecf0}.source:last-child{border-bottom:0}.source a{word-break:break-all;color:#175cd3}.badge{display:inline-block;padding:2px 7px;border-radius:999px;background:#eef4ff;font-size:.78rem;margin-right:5px}
+small{color:#667085}.hidden{display:none}@media(max-width:600px){.wrap{padding:10px}.card{padding:13px}button{width:100%}.row{display:block}.row>*{min-width:0}}
+</style></head>
+<body><main class="wrap">
+<header><div class="brand">Thai Legal Research</div><div class="sub">Source-first · OCS · ศาลฎีกา · ราชกิจจานุเบกษา</div></header>
+<section class="card"><h2>การเชื่อมต่อ</h2><input id="token" type="password" autocomplete="off" placeholder="Bearer Token"><div class="row"><button onclick="saveToken()">บันทึก Token</button><button class="secondary" onclick="checkHealth()">ตรวจสถานะระบบ</button></div><div id="status" class="status"></div></section>
+<section class="card"><h2>1. Research Case</h2><label for="facts">ข้อเท็จจริง</label><textarea id="facts" placeholder="ใส่ข้อเท็จจริงของคดี..."></textarea><label for="issue">ประเด็นกฎหมาย (ถ้ามี)</label><input id="issue" placeholder="เช่น อำนาจฟ้อง / องค์ประกอบความผิด / อายุความ"><button id="researchBtn" onclick="research()">เริ่มค้นคว้า</button></section>
+<section class="card"><h2>2. ค้นกฎหมายจาก OCS</h2><input id="lawq" placeholder="เช่น มาตรา 295 ทำร้ายร่างกาย"><button onclick="searchLaw()">ค้นกฎหมาย</button></section>
+<section class="card"><h2>3. ค้นฎีกา</h2><input id="caseq" placeholder="เช่น ทำร้ายร่างกาย มาตรา 295"><button onclick="searchCases()">ค้นฎีกา</button></section>
+<section class="card"><h2>ผลลัพธ์</h2><div id="out">ยังไม่มีผลลัพธ์</div></section>
+</main><script>
+const $=id=>document.getElementById(id);const out=x=>{$('out').textContent=typeof x==='string'?x:JSON.stringify(x,null,2)};
+function saveToken(){$('token').value.trim()&&localStorage.setItem('mcp_token',$('token').value.trim());setStatus('บันทึก Token แล้ว','ok')}
+function token(){return localStorage.getItem('mcp_token')||$('token').value.trim()}
+function headers(json=false){const h={Authorization:'Bearer '+token()};if(json)h['Content-Type']='application/json';return h}
+function setStatus(t,c=''){const e=$('status');e.textContent=t;e.className='status '+c}
+async function request(url,opt={}){if(!token())throw Error('กรุณาใส่ Bearer Token ก่อน');const r=await fetch(url,{...opt,headers:{...headers(!!opt.body),...(opt.headers||{})}});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data={error:text}}if(!r.ok)throw Error(data.error||`HTTP ${r.status}`);return data}
+async function checkHealth(){try{const d=await fetch('/health').then(r=>r.json());setStatus('ระบบออนไลน์: '+d.service,'ok')}catch(e){setStatus('เชื่อมต่อไม่ได้: '+e.message,'err')}}
+async function searchLaw(){try{out(await request('/api/law?q='+encodeURIComponent($('lawq').value)))}catch(e){out(e.message)}}
+async function searchCases(){try{out(await request('/api/cases?q='+encodeURIComponent($('caseq').value)))}catch(e){out(e.message)}}
+async function research(){const b=$('researchBtn');b.disabled=true;b.textContent='กำลังค้นคว้า...';try{out(await request('/api/research',{method:'POST',body:JSON.stringify({facts:$('facts').value,issue_hint:$('issue').value})}))}catch(e){out(e.message)}finally{b.disabled=false;b.textContent='เริ่มค้นคว้า'}}
+$('token').value=localStorage.getItem('mcp_token')||'';checkHealth();
+</script></body></html>

@@ -1,0 +1,27 @@
+[project]
+name = "thai-legal-mcp"
+version = "0.1.0"
+description = "Thai Legal Research MCP with source whitelisting, citations and verification"
+requires-python = ">=3.10"
+dependencies = [
+  "mcp[cli]>=2.0,<3",
+  "httpx>=0.27,<1",
+  "beautifulsoup4>=4.12,<5",
+  "pydantic>=2,<3",
+  "pydantic-settings>=2,<3",
+  "PyYAML>=6,<7",
+  "trafilatura>=2,<3",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9", "pytest-asyncio>=0.24,<1"]
+
+[project.scripts]
+thai-legal-mcp = "thai_legal_mcp.server:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.setuptools.package-data]
+thai_legal_mcp = ["web/*.html", "web/*.webmanifest"]
