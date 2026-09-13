@@ -19,10 +19,16 @@ async def fetch(url: str) -> tuple[str, str]:
     assert_allowed_url(url)
 
     try:
+        import ssl
+        import certifi
+
+        ca_default = ssl.get_default_verify_paths()
+
         async with httpx.AsyncClient(
             timeout=HTTP_TIMEOUT,
             follow_redirects=True,
             headers=HEADERS,
+            verify=certifi.where(),
         ) as client:
             r = await client.get(url)
 
@@ -40,9 +46,16 @@ async def fetch(url: str) -> tuple[str, str]:
         ) from e
 
     except httpx.ConnectError as e:
+        import ssl
+        import certifi
+
+        ca_default = ssl.get_default_verify_paths()
+
         raise RuntimeError(
             f"Could not connect to official source: {url} "
-            f"({type(e).__name__}: {e})"
+            f"({type(e).__name__}: {e}) | "
+            f"certifi={certifi.where()} | "
+            f"ssl_default={ca_default.cafile}"
         ) from e
 
     except httpx.RequestError as e:
