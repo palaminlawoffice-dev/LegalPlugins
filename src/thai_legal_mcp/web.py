@@ -1,6 +1,7 @@
 import hashlib
 import socket
 import ssl
+import tempfile
 from datetime import datetime, timezone
 from urllib.parse import urlparse, quote_plus
 
@@ -38,22 +39,35 @@ def _certificate_diagnostic(url: str) -> str:
                 sock,
                 server_hostname=host,
             ) as tls_sock:
-                cert = tls_sock.getpeercert()
+                cert_der = tls_sock.getpeercert(
+                    binary_form=True
+                )
 
-        subject = cert.get("subject", ())
-        issuer = cert.get("issuer", ())
-        not_before = cert.get("notBefore", "")
-        not_after = cert.get("notAfter", "")
+        cert_pem = ssl.DER_cert_to_PEM_cert(cert_der)
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".pem",
+            delete=False,
+        ) as f:
+            f.write(cert_pem)
+            cert_file = f.name
+
+        cert = ssl._ssl._test_decode_cert(cert_file)
 
         return (
-            f" | cert_subject={subject}"
-            f" | cert_issuer={issuer}"
-            f" | cert_not_before={not_before}"
-            f" | cert_not_after={not_after}"
+            f" | cert_subject={cert.get('subject')}"
+            f" | cert_issuer={cert.get('issuer')}"
+            f" | cert_not_before={cert.get('notBefore')}"
+            f" | cert_not_after={cert.get('notAfter')}"
+            f" | cert_serial={cert.get('serialNumber')}"
         )
 
     except Exception as e:
-        return f" | cert_diagnostic_failed={type(e).__name__}: {e}"
+        return (
+            f" | cert_diagnostic_failed="
+            f"{type(e).__name__}: {e}"
+        )
 
 
 async def fetch(url: str) -> tuple[str, str]:
@@ -76,8 +90,8 @@ async def fetch(url: str) -> tuple[str, str]:
 
     except httpx.HTTPStatusError as e:
         raise RuntimeError(
-            f"Official source returned HTTP {e.response.status_code}: "
-            f"{e.request.url}"
+            f"Official source returned HTTP "
+            f"{e.response.status_code}: {e.request.url}"
         ) from e
 
     except httpx.TimeoutException as e:
@@ -107,7 +121,10 @@ async def fetch(url: str) -> tuple[str, str]:
 
     ct = r.headers.get("content-type", "")
 
-    if "text/html" not in ct and "application/xhtml" not in ct:
+    if (
+        "text/html" not in ct
+        and "application/xhtml" not in ct
+    ):
         text = r.text
     else:
         text = (
@@ -142,8 +159,12 @@ async def discover(
     limit: int = 10,
 ) -> list[dict]:
     # Discovery only. Evidence is never accepted from the search engine.
-    site = " OR ".join(f"site:{d}" for d in domains)
+    site = " OR ".join(
+        f"site:{d}" for d in domains
+    )
+
     q = f"{query} {site}"
+
     url = (
         "https://www.bing.com/search?q="
         + quote_plus(q)
@@ -158,7 +179,11 @@ async def discover(
         r = await client.get(url)
         r.raise_for_status()
 
-    soup = BeautifulSoup(r.text, "html.parser")
+    soup = BeautifulSoup(
+        r.text,
+        "html.parser",
+    )
+
     out = []
 
     for li in soup.select("li.b_algo"):
@@ -168,19 +193,32 @@ async def discover(
             continue
 
         href = a["href"]
-        host = (urlparse(href).hostname or "").lower()
 
-        if host not in {d.lower() for d in domains}:
+        host = (
+            urlparse(href).hostname or ""
+        ).lower()
+
+        if host not in {
+            d.lower() for d in domains
+        }:
             continue
 
-        p = li.select_one(".b_caption p")
+        p = li.select_one(
+            ".b_caption p"
+        )
 
         out.append(
             {
-                "title": a.get_text(" ", strip=True),
+                "title": a.get_text(
+                    " ",
+                    strip=True,
+                ),
                 "url": href,
                 "snippet": (
-                    p.get_text(" ", strip=True)
+                    p.get_text(
+                        " ",
+                        strip=True,
+                    )
                     if p
                     else ""
                 ),
