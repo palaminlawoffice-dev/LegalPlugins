@@ -4,6 +4,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        openssl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -12,13 +13,20 @@ COPY . .
 
 RUN pip install --no-cache-dir .
 
-# Add the official GlobalSign intermediate certificate used by OCS.
+# Download the official GlobalSign RSA OV SSL CA 2018
+# certificate in DER format and convert it to PEM.
 RUN curl -fsSL \
     "https://secure.globalsign.com/cacert/gsrsaovsslca2018.crt" \
-    -o /usr/local/share/ca-certificates/globalsign-rsa-ov-ssl-ca-2018.crt \
-    && update-ca-certificates \
-    && cat /usr/local/share/ca-certificates/globalsign-rsa-ov-ssl-ca-2018.crt \
-       >> "$(python -c 'import certifi; print(certifi.where())')"
+    -o /tmp/globalsign-rsa-ov-ssl-ca-2018.der \
+    && openssl x509 \
+        -inform DER \
+        -in /tmp/globalsign-rsa-ov-ssl-ca-2018.der \
+        -out /tmp/globalsign-rsa-ov-ssl-ca-2018.pem \
+    && cat /tmp/globalsign-rsa-ov-ssl-ca-2018.pem \
+        >> "$(python -c 'import certifi; print(certifi.where())')" \
+    && rm -f \
+        /tmp/globalsign-rsa-ov-ssl-ca-2018.der \
+        /tmp/globalsign-rsa-ov-ssl-ca-2018.pem
 
 ENV MCP_TRANSPORT=http
 ENV MCP_HOST=0.0.0.0
