@@ -17,15 +17,59 @@ HEADERS = {
 
 async def fetch(url: str) -> tuple[str, str]:
     assert_allowed_url(url)
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True, headers=HEADERS) as client:
-        r = await client.get(url)
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=HTTP_TIMEOUT,
+            follow_redirects=True,
+            headers=HEADERS,
+        ) as client:
+            r = await client.get(url)
+
         r.raise_for_status()
-        ct = r.headers.get("content-type", "")
-        if "text/html" not in ct and "application/xhtml" not in ct:
-            text = r.text
-        else:
-            text = (trafilatura.extract(r.text, include_links=True, include_tables=True) if trafilatura else None) or BeautifulSoup(r.text, "html.parser").get_text("\n", strip=True)
-        return text, str(r.url)
+
+    except httpx.HTTPStatusError as e:
+        raise RuntimeError(
+            f"Official source returned HTTP {e.response.status_code}: "
+            f"{e.request.url}"
+        ) from e
+
+    except httpx.TimeoutException as e:
+        raise RuntimeError(
+            f"Official source request timed out: {url}"
+        ) from e
+
+    except httpx.ConnectError as e:
+        raise RuntimeError(
+            f"Could not connect to official source: {url} "
+            f"({type(e).__name__}: {e})"
+        ) from e
+
+    except httpx.RequestError as e:
+        raise RuntimeError(
+            f"Official source request failed: {url} "
+            f"({type(e).__name__}: {e})"
+        ) from e
+
+    ct = r.headers.get("content-type", "")
+
+    if "text/html" not in ct and "application/xhtml" not in ct:
+        text = r.text
+    else:
+        text = (
+            trafilatura.extract(
+                r.text,
+                include_links=True,
+                include_tables=True,
+            )
+            if trafilatura
+            else None
+        ) or BeautifulSoup(
+            r.text,
+            "html.parser",
+        ).get_text("\n", strip=True)
+
+    return text, str(r.url)
 
 def sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
