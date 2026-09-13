@@ -1,25 +1,65 @@
 import hashlib
+import socket
+import ssl
 from datetime import datetime, timezone
 from urllib.parse import urlparse, quote_plus
+
 import httpx
 from bs4 import BeautifulSoup
+
 try:
     import trafilatura
 except ImportError:  # optional fallback for minimal installs
     trafilatura = None
+
 from .security import assert_allowed_url
 from .settings import HTTP_TIMEOUT
+
 
 HEADERS = {
     "User-Agent": "ThaiLegalMCP/0.1 (+legal-research; official-source-only)",
     "Accept-Language": "th-TH,th;q=0.9,en;q=0.5",
 }
 
+
+def _certificate_diagnostic(url: str) -> str:
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    port = parsed.port or 443
+
+    try:
+        context = ssl._create_unverified_context()
+
+        with socket.create_connection(
+            (host, port),
+            timeout=HTTP_TIMEOUT,
+        ) as sock:
+            with context.wrap_socket(
+                sock,
+                server_hostname=host,
+            ) as tls_sock:
+                cert = tls_sock.getpeercert()
+
+        subject = cert.get("subject", ())
+        issuer = cert.get("issuer", ())
+        not_before = cert.get("notBefore", "")
+        not_after = cert.get("notAfter", "")
+
+        return (
+            f" | cert_subject={subject}"
+            f" | cert_issuer={issuer}"
+            f" | cert_not_before={not_before}"
+            f" | cert_not_after={not_after}"
+        )
+
+    except Exception as e:
+        return f" | cert_diagnostic_failed={type(e).__name__}: {e}"
+
+
 async def fetch(url: str) -> tuple[str, str]:
     assert_allowed_url(url)
 
     try:
-        import ssl
         import certifi
 
         ca_default = ssl.get_default_verify_paths()
@@ -46,16 +86,17 @@ async def fetch(url: str) -> tuple[str, str]:
         ) from e
 
     except httpx.ConnectError as e:
-        import ssl
         import certifi
 
         ca_default = ssl.get_default_verify_paths()
+        cert_diag = _certificate_diagnostic(url)
 
         raise RuntimeError(
             f"Could not connect to official source: {url} "
             f"({type(e).__name__}: {e}) | "
             f"certifi={certifi.where()} | "
             f"ssl_default={ca_default.cafile}"
+            f"{cert_diag}"
         ) from e
 
     except httpx.RequestError as e:
@@ -84,32 +125,69 @@ async def fetch(url: str) -> tuple[str, str]:
 
     return text, str(r.url)
 
+
 def sha256(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
+    return hashlib.sha256(
+        text.encode("utf-8", errors="ignore")
+    ).hexdigest()
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-async def discover(query: str, domains: list[str], limit: int = 10) -> list[dict]:
+
+async def discover(
+    query: str,
+    domains: list[str],
+    limit: int = 10,
+) -> list[dict]:
     # Discovery only. Evidence is never accepted from the search engine.
     site = " OR ".join(f"site:{d}" for d in domains)
     q = f"{query} {site}"
-    url = "https://www.bing.com/search?q=" + quote_plus(q) + f"&count={limit}"
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True, headers=HEADERS) as client:
+    url = (
+        "https://www.bing.com/search?q="
+        + quote_plus(q)
+        + f"&count={limit}"
+    )
+
+    async with httpx.AsyncClient(
+        timeout=HTTP_TIMEOUT,
+        follow_redirects=True,
+        headers=HEADERS,
+    ) as client:
         r = await client.get(url)
         r.raise_for_status()
+
     soup = BeautifulSoup(r.text, "html.parser")
     out = []
+
     for li in soup.select("li.b_algo"):
         a = li.select_one("h2 a")
+
         if not a or not a.get("href"):
             continue
+
         href = a["href"]
         host = (urlparse(href).hostname or "").lower()
+
         if host not in {d.lower() for d in domains}:
             continue
+
         p = li.select_one(".b_caption p")
-        out.append({"title": a.get_text(" ", strip=True), "url": href, "snippet": p.get_text(" ", strip=True) if p else ""})
+
+        out.append(
+            {
+                "title": a.get_text(" ", strip=True),
+                "url": href,
+                "snippet": (
+                    p.get_text(" ", strip=True)
+                    if p
+                    else ""
+                ),
+            }
+        )
+
         if len(out) >= limit:
             break
+
     return out
