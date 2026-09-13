@@ -107,7 +107,14 @@ def create_app(mcp, token: str):
         Route("/api/fetch", fetch, methods=["GET"]),
         Route("/api/verify", verify, methods=["GET"]),
         Route("/api/cache", cache_status, methods=["GET"]),
-        Mount("/mcp", app=mcp.streamable_http_app(stateless_http=True, host="0.0.0.0")),
+        Mount(
+            "/mcp",
+            app=mcp.streamable_http_app(
+                streamable_http_path="/",
+                stateless_http=True,
+                host="0.0.0.0",
+            ),
+         ),
     ]
     app = Starlette(routes=routes, lifespan=lifespan)
     app.add_middleware(BearerAuthMiddleware, token=token)
